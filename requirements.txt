@@ -1,0 +1,5 @@
+matplotlib
+pyserial
+pyqtgraph
+PyQt5
+psutil
