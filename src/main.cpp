@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#define MUSCLE_SENSOR_PIN 26  // Pin donde está conectado el sensor EMG
+#define MUSCLE_SENSOR_PIN 15  // Pin donde está conectado el sensor EMG
 
 void setup()
 {

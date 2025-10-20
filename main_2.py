@@ -3,7 +3,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 import serial
 
 # Configure serial port
-ser = serial.Serial('/dev/tty.usbserial-0001', 9600)
+ser = serial.Serial('/dev/tty.usbserial-10', 9600)
 
 # Create a PyQtGraph application
 app = QtWidgets.QApplication([])

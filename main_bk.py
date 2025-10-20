@@ -4,7 +4,6 @@ import numpy as np
 import pyqtgraph as pg
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer
-from scipy.signal import butter, filtfilt
 
 # Set up the serial connection
 serial_port = '/dev/tty.usbserial-10'  # Adjust based on your system
@@ -51,69 +50,56 @@ class EMGPlotter:
         self.timer.timeout.connect(self.update_plot)
         self.timer.start(50)  # Update every 50 ms
 
-    def bandpass_filter(self, data, lowcut=20, highcut=450, fs=1000, order=4):
-        """
-        Applies a Butterworth bandpass filter to the signal.
-        - data: array of signal values
-        - lowcut, highcut: frequency limits in Hz
-        - fs: sampling frequency (Hz)
-        - order: filter steepness
-        """
-        nyquist = 0.5 * fs
-        low = lowcut / nyquist
-        high = highcut / nyquist
-        b, a = butter(order, [low, high], btype='band')
-        y = filtfilt(b, a, data)
-        return y
-
     def update_plot(self):
         global ser
         if ser.in_waiting:
             try:
+                # Read and parse serial data
                 line = ser.readline().decode('utf-8').strip()
-                value = int(line)
+                value = int(line)  # Convert to integer as values are between 0 and 5000
                 self.raw_data.append(value)
 
+                # Limit raw data to the last 500 samples
                 if len(self.raw_data) > 500:
                     self.raw_data.pop(0)
 
-                # Show raw EMG
-                self.raw_curve.setData(self.raw_data)
+                # Add value to the temporary group
+                self.temp_group.append(value)
 
-                # --- Apply band-pass filter when enough samples ---
-                if len(self.raw_data) > 20:
-                    # fs=1000 assumed; adjust if different
-                    filtered = self.bandpass_filter(np.array(self.raw_data), lowcut=20, highcut=450, fs=1000, order=4)
+                # When the group reaches 10 samples
+                if len(self.temp_group) == 10:
+                    self.filtered_data.extend(self.temp_group)  # Add the group to filtered data
+                    self.temp_group = []  # Clear the temporary group
 
-                    # Keep same size as raw
-                    self.filtered_data = filtered[-500:].tolist()
+                    # Limit filtered data to the last 100 values
+                    if len(self.filtered_data) > 100:
+                        self.filtered_data = self.filtered_data[-100:]
 
-                    # Plot the filtered data (red)
-                    self.filtered_curve.setData(self.filtered_data)
+                # Update the raw data curve
+                self.raw_curve.setData(self.raw_data)  # Show the last 500 samples for raw data
 
-                    # Update Fourier transform
-                    self.update_fourier_plot(self.filtered_data)
+                # Update the filtered data curve
+                self.filtered_curve.setData(self.filtered_data)  # Show the filtered data
+
+                # Update the Fourier Transform plot
+                if len(self.filtered_data) > 10:  # Ensure enough data for Fourier Transform
+                    self.update_fourier_plot()
 
             except ValueError:
-                pass
+                pass  # Ignore invalid data
 
-    def update_fourier_plot(self, filtered_data):
-        filtered_array = np.array(filtered_data)
-        fourier = np.fft.fft(filtered_array)
-        frequencies = np.fft.fftfreq(len(filtered_array), d=1/1000.0)  # 1/fs
+    def update_fourier_plot(self):
+        # Perform Fourier Transform on the filtered data
+        filtered_array = np.array(self.filtered_data)
+        fourier = np.fft.fft(filtered_array)  # Compute FFT
+        frequencies = np.fft.fftfreq(len(filtered_array), d=0.05)  # Compute frequency bins (adjust d if needed)
 
-        positive_freqs = frequencies[:len(frequencies)//2]
-        positive_amplitudes = np.abs(fourier[:len(fourier)//2])
+        # Take only the positive frequencies
+        positive_freqs = frequencies[:len(frequencies) // 2]
+        positive_amplitudes = np.abs(fourier[:len(fourier) // 2])
 
-        self.fourier_plot.clear()
-
-        # Draw "stem" style lines
-        for f, a in zip(positive_freqs, positive_amplitudes):
-            line = pg.PlotDataItem([f, f], [0, a], pen=pg.mkPen('g', width=2))
-            self.fourier_plot.addItem(line)
-
-
-
+        # Update the Fourier Transform curve
+        self.fourier_curve.setData(positive_freqs, positive_amplitudes)
 
     def run(self):
         # Start the application
